@@ -1,25 +1,19 @@
 'use client';
 
 /**
- * PÁGINA DE LOGIN - Autenticación del Backoffice
+ * PÁGINA DE LOGIN - Autenticación del Backoffice con Supabase
  * 
- * Login simulado que almacena token en localStorage.
- * Credenciales de prueba:
- * - Email: admin@politicalnews.com
- * - Password: admin123
- * 
- * NOTA PARA INTEGRACIÓN:
- * Reemplazar por autenticación real con JWT cuando
- * el backend esté disponible.
+ * Login usando Supabase Auth.
+ * Los usuarios deben estar registrados en Supabase.
  */
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { useAuthStore } from '@/lib/store';
+import { useAuth } from '@/lib/hooks/use-auth';
 
 interface LoginForm {
   email: string;
@@ -28,10 +22,19 @@ interface LoginForm {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuthStore();
+  const searchParams = useSearchParams();
+  const { signIn, isAuthenticated, loading: authLoading } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Redirigir si ya está autenticado
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      const redirect = searchParams.get('redirect') || '/dashboard';
+      router.push(redirect);
+    }
+  }, [isAuthenticated, authLoading, router, searchParams]);
 
   const {
     register,
@@ -49,19 +52,26 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const success = await login(data.email, data.password);
-      
-      if (success) {
-        router.push('/dashboard');
-      } else {
-        setError('Credenciales incorrectas. Probá con admin@politicalnews.com / admin123');
-      }
-    } catch {
-      setError('Error al iniciar sesión. Intentá nuevamente.');
+      await signIn(data.email, data.password);
+      const redirect = searchParams.get('redirect') || '/dashboard';
+      router.push(redirect);
+    } catch (err: any) {
+      setError(err.message || 'Error al iniciar sesión. Verificá tus credenciales.');
     } finally {
       setIsLoading(false);
     }
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Cargando...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
@@ -88,14 +98,11 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Demo Credentials */}
+          {/* Info */}
           <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
-            <p className="text-blue-800 text-sm font-medium mb-1">Credenciales de prueba:</p>
+            <p className="text-blue-800 text-sm font-medium mb-1">Acceso al Backoffice</p>
             <p className="text-blue-700 text-sm">
-              Email: <code className="bg-blue-100 px-1 rounded">admin@politicalnews.com</code>
-            </p>
-            <p className="text-blue-700 text-sm">
-              Password: <code className="bg-blue-100 px-1 rounded">admin123</code>
+              Ingresá con tu cuenta de Supabase para acceder al panel de administración.
             </p>
           </div>
 

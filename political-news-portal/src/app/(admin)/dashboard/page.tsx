@@ -1,40 +1,41 @@
 'use client';
 
 /**
- * DASHBOARD - Panel Principal del Backoffice
+ * DASHBOARD - Panel Principal del Backoffice con Supabase
  * 
  * Muestra:
- * - Estadísticas generales
- * - Listado de noticias con filtros
+ * - Estadísticas generales desde la base de datos
+ * - Listado de noticias con filtros reales
  * - Estados: Scrapeada, Reescrita, Borrador, Publicada
- * - Acciones rápidas
+ * - Acciones: Ver, Editar, Eliminar
  * 
  * INTEGRACIÓN N8N:
  * Las noticias con estado "scraped" vienen del flujo de scraping.
  * Las noticias con estado "rewritten" fueron procesadas por IA.
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { 
   Search, 
   Plus, 
   Edit, 
   Eye, 
   Trash2, 
-  Filter,
   FileText,
   Clock,
   CheckCircle,
   AlertCircle,
-  TrendingUp
+  TrendingUp,
+  Loader2
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { getAllArticles, categories } from '@/lib/mock-data';
+import { categories } from '@/lib/mock-data';
 import { 
   formatDateTime, 
   getStatusLabel, 
@@ -42,37 +43,35 @@ import {
   getCategoryLabel 
 } from '@/lib/utils';
 import { useDashboardStore } from '@/lib/store';
-import { ArticleStatus } from '@/types';
+import { ArticleStatus, Article, Category } from '@/types';
+import { getArticles, getDashboardStats, deleteArticle } from '@/lib/services/articles';
+import { useAuth } from '@/lib/hooks/use-auth';
 
-// Stats cards data
-const statsCards = [
+// Stats cards configuration
+const statsCardsConfig = [
   { 
     label: 'Total Noticias', 
-    value: '8', 
+    key: 'total' as const,
     icon: FileText, 
     color: 'bg-blue-500',
-    trend: '+12% este mes'
   },
   { 
     label: 'Publicadas', 
-    value: '5', 
+    key: 'published' as const,
     icon: CheckCircle, 
     color: 'bg-green-500',
-    trend: '+3 esta semana'
   },
   { 
-    label: 'Pendientes', 
-    value: '2', 
+    label: 'Borradores', 
+    key: 'draft' as const,
     icon: Clock, 
     color: 'bg-yellow-500',
-    trend: 'Requieren revisión'
   },
   { 
     label: 'Scrapeadas', 
-    value: '1', 
+    key: 'scraped' as const,
     icon: AlertCircle, 
     color: 'bg-purple-500',
-    trend: 'Nuevas de n8n'
   },
 ];
 
@@ -91,7 +90,20 @@ const categoryOptions = [
 ];
 
 export default function DashboardPage() {
-  const articles = getAllArticles();
+  const router = useRouter();
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [stats, setStats] = useState({
+    total: 0,
+    published: 0,
+    draft: 0,
+    scraped: 0,
+    rewritten: 0,
+    archived: 0,
+  });
+  const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  
   const { 
     searchQuery, 
     statusFilter, 
@@ -102,30 +114,89 @@ export default function DashboardPage() {
     resetFilters
   } = useDashboardStore();
 
-  // Filtrar artículos
+  // Cargar artículos y estadísticas
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push('/login');
+      return;
+    }
+
+    if (isAuthenticated) {
+      loadData();
+    }
+  }, [isAuthenticated, authLoading, router]);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      
+      // Cargar artículos con filtros
+      const filters: any = {};
+      if (statusFilter !== 'all') filters.status = statusFilter as ArticleStatus;
+      if (categoryFilter !== 'all') filters.category = categoryFilter as Category;
+      if (searchQuery) filters.search = searchQuery;
+
+      const [articlesData, statsData] = await Promise.all([
+        getArticles(filters),
+        getDashboardStats(),
+      ]);
+
+      setArticles(articlesData);
+      setStats(statsData);
+    } catch (error) {
+      console.error('Error cargando datos:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Recargar cuando cambian los filtros
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadData();
+    }
+  }, [statusFilter, categoryFilter, searchQuery]);
+
+  // Filtrar artículos localmente (ya vienen filtrados del servidor, pero aplicamos búsqueda)
   const filteredArticles = useMemo(() => {
+    if (!searchQuery) return articles;
+    
+    const query = searchQuery.toLowerCase();
     return articles.filter(article => {
-      // Filtro de búsqueda
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        const matchesTitle = article.title.toLowerCase().includes(query);
-        const matchesContent = article.content.toLowerCase().includes(query);
-        if (!matchesTitle && !matchesContent) return false;
-      }
-
-      // Filtro de estado
-      if (statusFilter !== 'all' && article.status !== statusFilter) {
-        return false;
-      }
-
-      // Filtro de categoría
-      if (categoryFilter !== 'all' && article.category !== categoryFilter) {
-        return false;
-      }
-
-      return true;
+      const matchesTitle = article.title.toLowerCase().includes(query);
+      const matchesContent = article.content.toLowerCase().includes(query);
+      return matchesTitle || matchesContent;
     });
-  }, [articles, searchQuery, statusFilter, categoryFilter]);
+  }, [articles, searchQuery]);
+
+  // Manejar eliminación
+  const handleDelete = async (id: string) => {
+    if (!confirm('¿Estás seguro de que querés eliminar esta noticia?')) {
+      return;
+    }
+
+    try {
+      setDeletingId(id);
+      await deleteArticle(id);
+      await loadData(); // Recargar datos
+    } catch (error) {
+      console.error('Error eliminando artículo:', error);
+      alert('Error al eliminar la noticia');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  if (authLoading || loading) {
+    return (
+      <div className="p-6 lg:p-8 flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <Loader2 className="animate-spin h-12 w-12 text-red-600 mx-auto mb-4" />
+          <p className="text-gray-600">Cargando dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 lg:p-8">
@@ -147,22 +218,24 @@ export default function DashboardPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {statsCards.map((stat) => (
-          <Card key={stat.label} hover>
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm text-gray-500 mb-1">{stat.label}</p>
-                  <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
-                  <p className="text-xs text-gray-400 mt-1">{stat.trend}</p>
+        {statsCardsConfig.map((stat) => {
+          const value = stats[stat.key];
+          return (
+            <Card key={stat.label} hover>
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">{stat.label}</p>
+                    <p className="text-3xl font-bold text-gray-900">{value}</p>
+                  </div>
+                  <div className={`p-3 rounded-lg ${stat.color}`}>
+                    <stat.icon size={24} className="text-white" />
+                  </div>
                 </div>
-                <div className={`p-3 rounded-lg ${stat.color}`}>
-                  <stat.icon size={24} className="text-white" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {/* Filters Section */}
@@ -177,6 +250,11 @@ export default function DashboardPage() {
                 placeholder="Buscar noticias..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    loadData();
+                  }
+                }}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
               />
             </div>
@@ -300,10 +378,16 @@ export default function DashboardPage() {
                         <Edit size={18} />
                       </Link>
                       <button
-                        className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                        onClick={() => handleDelete(article.id)}
+                        disabled={deletingId === article.id}
+                        className="p-2 text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50"
                         title="Eliminar"
                       >
-                        <Trash2 size={18} />
+                        {deletingId === article.id ? (
+                          <Loader2 size={18} className="animate-spin" />
+                        ) : (
+                          <Trash2 size={18} />
+                        )}
                       </button>
                     </div>
                   </td>

@@ -2,74 +2,15 @@
  * ZUSTAND STORE - Estado Global de la Aplicación
  * 
  * Maneja:
- * - Autenticación (simulada con localStorage)
  * - Estado del editor
  * - Configuración de placas
  * 
- * NOTA PARA INTEGRACIÓN:
- * Reemplazar la lógica de autenticación simulada por
- * llamadas reales al backend cuando esté disponible.
+ * NOTA: La autenticación ahora se maneja directamente con Supabase Auth
+ * usando hooks y el cliente de Supabase.
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { User, AuthState, Article, PlacaConfig, PlacaFormat } from '@/types';
-
-// Store de autenticación
-interface AuthStore extends AuthState {
-  login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
-  checkAuth: () => boolean;
-}
-
-// Usuario simulado para desarrollo
-const mockUser: User = {
-  id: '1',
-  email: 'admin@politicalnews.com',
-  name: 'Administrador',
-  role: 'admin',
-  avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop',
-};
-
-export const useAuthStore = create<AuthStore>()(
-  persist(
-    (set, get) => ({
-      user: null,
-      token: null,
-      isAuthenticated: false,
-
-      login: async (email: string, password: string) => {
-        // Simulación de login - reemplazar con API real
-        // Credenciales de prueba: admin@politicalnews.com / admin123
-        if (email === 'admin@politicalnews.com' && password === 'admin123') {
-          const fakeToken = 'mock-jwt-token-' + Date.now();
-          set({
-            user: mockUser,
-            token: fakeToken,
-            isAuthenticated: true,
-          });
-          return true;
-        }
-        return false;
-      },
-
-      logout: () => {
-        set({
-          user: null,
-          token: null,
-          isAuthenticated: false,
-        });
-      },
-
-      checkAuth: () => {
-        return get().isAuthenticated && !!get().token;
-      },
-    }),
-    {
-      name: 'auth-storage', // nombre en localStorage
-    }
-  )
-);
+import { Article, PlacaConfig, PlacaFormat } from '@/types';
 
 // Store del editor de noticias
 interface EditorStore {

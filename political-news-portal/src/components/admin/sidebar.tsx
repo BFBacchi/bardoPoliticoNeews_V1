@@ -14,7 +14,7 @@ import {
   Home
 } from 'lucide-react';
 import { useState } from 'react';
-import { useAuthStore } from '@/lib/store';
+import { useAuth } from '@/lib/hooks/use-auth';
 import { cn } from '@/lib/utils';
 
 const menuItems = [
@@ -38,7 +38,7 @@ const menuItems = [
 export function AdminSidebar() {
   const pathname = usePathname();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const { user, logout, isAuthenticated } = useAuthStore();
+  const { appUser, signOut, isAuthenticated } = useAuth();
 
   // No mostrar sidebar en login
   if (pathname === '/login') {
@@ -137,22 +137,23 @@ export function AdminSidebar() {
 
           {/* User Section */}
           <div className="p-4 border-t border-gray-800">
-            {isAuthenticated && user ? (
+            {isAuthenticated && appUser ? (
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center">
-                  <span className="text-sm font-medium">
-                    {user.name.charAt(0)}
-                  </span>
+                  {appUser.avatar ? (
+                    <img src={appUser.avatar} alt={appUser.name} className="w-full h-full rounded-full" />
+                  ) : (
+                    <span className="text-sm font-medium">
+                      {appUser.name.charAt(0).toUpperCase()}
+                    </span>
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{user.name}</p>
-                  <p className="text-xs text-gray-400 truncate">{user.email}</p>
+                  <p className="text-sm font-medium truncate">{appUser.name}</p>
+                  <p className="text-xs text-gray-400 truncate">{appUser.email}</p>
                 </div>
                 <button
-                  onClick={() => {
-                    logout();
-                    window.location.href = '/login';
-                  }}
+                  onClick={() => signOut()}
                   className="p-2 text-gray-400 hover:text-white transition-colors"
                   title="Cerrar sesión"
                 >

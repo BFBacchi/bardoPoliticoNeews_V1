@@ -2,12 +2,14 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Menu, X, Search, TrendingUp } from 'lucide-react';
+import { Menu, X, Search, TrendingUp, LogIn } from 'lucide-react';
 import { categories } from '@/lib/mock-data';
+import { useAuth } from '@/lib/hooks/use-auth';
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const { isAuthenticated, appUser } = useAuth();
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -50,6 +52,17 @@ export function Header() {
               <Search size={20} />
             </button>
 
+            {/* Login Button */}
+            {!isAuthenticated && (
+              <Link
+                href="/login"
+                className="hidden md:flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors text-sm font-medium"
+              >
+                <LogIn size={16} />
+                Admin
+              </Link>
+            )}
+
             {/* Mobile Menu Toggle */}
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -81,6 +94,17 @@ export function Header() {
                 </Link>
               </li>
             ))}
+            {!isAuthenticated && (
+              <li className="md:hidden">
+                <Link
+                  href="/login"
+                  className="flex items-center gap-2 py-2 md:py-0 text-red-600 font-medium hover:text-red-700 transition-colors"
+                >
+                  <LogIn size={16} />
+                  Acceso Admin
+                </Link>
+              </li>
+            )}
           </ul>
         </nav>
       </div>

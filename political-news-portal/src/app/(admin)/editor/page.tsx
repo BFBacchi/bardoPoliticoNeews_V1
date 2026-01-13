@@ -26,7 +26,8 @@ import {
   Wand2, 
   Globe, 
   Clock,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -35,9 +36,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { TiptapEditor } from '@/components/editor/tiptap-editor';
 import { categories } from '@/lib/mock-data';
-import { generateSlug, calculateReadingTime } from '@/lib/utils';
+import { calculateReadingTime } from '@/lib/utils';
 import { ArticleStatus, Category } from '@/types';
 import Link from 'next/link';
+import { useAuth } from '@/lib/hooks/use-auth';
+import { createArticle } from '@/lib/services/articles';
 
 interface ArticleForm {
   title: string;
@@ -62,9 +65,18 @@ const categoryOptions = categories.map(c => ({ value: c.value, label: c.label })
 
 export default function EditorPage() {
   const router = useRouter();
+  const { appUser, isAuthenticated, loading: authLoading } = useAuth();
   const [content, setContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [error, setError] = useState('');
+
+  // Redirigir si no está autenticado
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push('/login?redirect=/editor');
+    }
+  }, [isAuthenticated, authLoading, router]);
 
   const {
     register,
@@ -100,27 +112,34 @@ export default function EditorPage() {
   const readingTime = calculateReadingTime(watchedContent);
 
   const onSubmit = async (data: ArticleForm) => {
+    if (!appUser) {
+      setError('Debes estar autenticado para crear artículos');
+      return;
+    }
+
     setIsSaving(true);
+    setError('');
     
     try {
-      // Simular guardado
-      const articleData = {
-        ...data,
-        content,
-        readingTime,
-        publishedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      
-      console.log('Guardando artículo:', articleData);
-      
-      // Simular delay de API
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await createArticle({
+        title: data.title,
+        subtitle: data.subtitle,
+        content: content || '<p></p>',
+        category: data.category,
+        status: data.status,
+        authorId: appUser.id,
+        featuredImage: data.featuredImage || undefined,
+        source: data.source || undefined,
+        metaTitle: data.metaTitle || undefined,
+        metaDescription: data.metaDescription || undefined,
+        tags: [],
+      });
       
       // Redirigir al dashboard
       router.push('/dashboard');
-    } catch (error) {
-      console.error('Error guardando:', error);
+    } catch (err: any) {
+      console.error('Error guardando:', err);
+      setError(err.message || 'Error al guardar el artículo');
     } finally {
       setIsSaving(false);
     }
@@ -142,6 +161,21 @@ export default function EditorPage() {
     }
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <Loader2 className="animate-spin h-12 w-12 text-red-600 mx-auto mb-4" />
+          <p className="text-gray-600">Cargando editor...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null; // El useEffect redirigirá
+  }
+
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
@@ -161,6 +195,11 @@ export default function EditorPage() {
               <p className="text-sm text-gray-500">
                 {readingTime} min de lectura estimado
               </p>
+              {error && (
+                <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
             </div>
           </div>
           

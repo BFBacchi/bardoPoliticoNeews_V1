@@ -34,6 +34,12 @@ Un portal de noticias de actualidad política profesional, construido con Next.j
 
 ## 🚀 Inicio Rápido
 
+### Prerrequisitos
+1. Cuenta en [Supabase](https://supabase.com)
+2. Node.js 18+ instalado
+
+### Configuración Inicial
+
 ```bash
 # Clonar el proyecto
 git clone <repo>
@@ -42,12 +48,27 @@ cd political-news-portal
 # Instalar dependencias
 npm install
 
+# Configurar variables de entorno
+cp .env.example .env.local
+# Editar .env.local con tus credenciales de Supabase
+
+# Ejecutar migración SQL en Supabase Dashboard
+# Ver: docs/SUPABASE-MIGRATION.md
+
 # Ejecutar en desarrollo
 npm run dev
 
 # Abrir en navegador
 open http://localhost:3000
 ```
+
+**⚠️ IMPORTANTE:** Antes de ejecutar, debes:
+1. Crear un proyecto en Supabase
+2. Ejecutar la migración SQL (`supabase/migrations/001_initial_schema.sql`)
+3. Configurar Storage bucket `images`
+4. Crear un usuario en Supabase Auth
+
+Ver la [Guía de Migración a Supabase](docs/SUPABASE-MIGRATION.md) para instrucciones detalladas.
 
 ## 📁 Estructura del Proyecto
 
@@ -173,9 +194,14 @@ Crea contenido visual para redes sociales:
 
 **URL:** `/login`
 
-**Credenciales de prueba:**
-- Email: `admin@politicalnews.com`
-- Password: `admin123`
+**Autenticación:**
+- El portal ahora usa **Supabase Auth** para autenticación real
+- Los usuarios deben estar registrados en tu proyecto de Supabase
+- Ver [docs/SUPABASE-MIGRATION.md](docs/SUPABASE-MIGRATION.md) para configuración completa
+
+**Link de acceso:**
+- Botón "Admin" en el header de la página principal
+- O directamente: `http://localhost:3000/login`
 
 ## 📝 Scripts Disponibles
 
@@ -196,12 +222,12 @@ npm run lint     # Linter ESLint
 - [x] Generador de placas
 - [x] Documentación
 
-### Fase 2 - Backend (Próximo)
-- [ ] API REST con Node.js
-- [ ] Base de datos PostgreSQL/MongoDB
-- [ ] Autenticación JWT
-- [ ] Upload de imágenes
-- [ ] Webhooks para n8n
+### Fase 2 - Backend ✅
+- [x] Integración con Supabase (PostgreSQL)
+- [x] Autenticación con Supabase Auth
+- [x] Upload de imágenes (Supabase Storage)
+- [x] CRUD completo de artículos
+- [ ] Webhooks para n8n (pendiente)
 
 ### Fase 3 - Automatización
 - [ ] Flujos n8n de scraping
@@ -217,6 +243,7 @@ npm run lint     # Linter ESLint
 
 ## 📚 Documentación Adicional
 
+- **[Guía de Migración a Supabase](docs/SUPABASE-MIGRATION.md)** ⭐ **NUEVO**
 - [Guía de Integración n8n](docs/N8N-INTEGRATION.md)
 - [Guía de Integración IA](docs/AI-INTEGRATION.md)
 - [Documentación General](docs/README.md)

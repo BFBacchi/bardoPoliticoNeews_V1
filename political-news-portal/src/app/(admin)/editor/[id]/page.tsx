@@ -29,10 +29,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TiptapEditor } from '@/components/editor/tiptap-editor';
-import { categories, mockArticles } from '@/lib/mock-data';
-import { generateSlug, calculateReadingTime, getStatusLabel, getStatusColor } from '@/lib/utils';
+import { categories } from '@/lib/mock-data';
+import { calculateReadingTime, getStatusLabel, getStatusColor } from '@/lib/utils';
 import { ArticleStatus, Category, Article } from '@/types';
 import Link from 'next/link';
+import { useAuth } from '@/lib/hooks/use-auth';
+import { getArticleById, updateArticle } from '@/lib/services/articles';
+import { Loader2 } from 'lucide-react';
 
 interface ArticleForm {
   title: string;
@@ -63,12 +66,15 @@ interface PageProps {
 export default function EditArticlePage({ params }: PageProps) {
   const { id } = use(params);
   const router = useRouter();
+  const { appUser, isAuthenticated, loading: authLoading } = useAuth();
   const [article, setArticle] = useState<Article | null>(null);
   const [content, setContent] = useState('');
   const [originalContent, setOriginalContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [showPreview, setShowPreview] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
+  const [error, setError] = useState('');
 
   const {
     register,
@@ -79,45 +85,80 @@ export default function EditArticlePage({ params }: PageProps) {
     formState: { errors },
   } = useForm<ArticleForm>();
 
-  // Cargar artículo
+  // Redirigir si no está autenticado
   useEffect(() => {
-    const found = mockArticles.find(a => a.id === id);
-    if (found) {
-      setArticle(found);
-      setContent(found.content);
-      setOriginalContent(found.originalContent || '');
-      reset({
-        title: found.title,
-        subtitle: found.subtitle,
-        slug: found.slug,
-        category: found.category,
-        status: found.status,
-        source: found.source || '',
-        metaTitle: found.metaTitle || '',
-        metaDescription: found.metaDescription || '',
-        featuredImage: found.featuredImage,
-      });
+    if (!authLoading && !isAuthenticated) {
+      router.push(`/login?redirect=/editor/${id}`);
     }
-  }, [id, reset]);
+  }, [isAuthenticated, authLoading, router, id]);
+
+  // Cargar artículo desde Supabase
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadArticle();
+    }
+  }, [id, isAuthenticated]);
+
+  const loadArticle = async () => {
+    try {
+      setLoading(true);
+      const articleData = await getArticleById(id);
+      
+      if (!articleData) {
+        setError('Artículo no encontrado');
+        return;
+      }
+
+      setArticle(articleData);
+      setContent(articleData.content);
+      setOriginalContent(articleData.originalContent || '');
+      reset({
+        title: articleData.title,
+        subtitle: articleData.subtitle,
+        slug: articleData.slug,
+        category: articleData.category,
+        status: articleData.status,
+        source: articleData.source || '',
+        metaTitle: articleData.metaTitle || '',
+        metaDescription: articleData.metaDescription || '',
+        featuredImage: articleData.featuredImage,
+      });
+    } catch (err: any) {
+      console.error('Error cargando artículo:', err);
+      setError(err.message || 'Error al cargar el artículo');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const readingTime = calculateReadingTime(content);
 
   const onSubmit = async (data: ArticleForm) => {
+    if (!appUser) {
+      setError('Debes estar autenticado para editar artículos');
+      return;
+    }
+
     setIsSaving(true);
+    setError('');
     
     try {
-      const articleData = {
-        ...data,
-        content,
-        readingTime,
-        updatedAt: new Date().toISOString(),
-      };
+      await updateArticle(id, {
+        title: data.title,
+        subtitle: data.subtitle,
+        content: content || '<p></p>',
+        category: data.category,
+        status: data.status,
+        featuredImage: data.featuredImage || undefined,
+        source: data.source || undefined,
+        metaTitle: data.metaTitle || undefined,
+        metaDescription: data.metaDescription || undefined,
+      });
       
-      console.log('Actualizando artículo:', articleData);
-      await new Promise(resolve => setTimeout(resolve, 1000));
       router.push('/dashboard');
-    } catch (error) {
-      console.error('Error guardando:', error);
+    } catch (err: any) {
+      console.error('Error guardando:', err);
+      setError(err.message || 'Error al guardar el artículo');
     } finally {
       setIsSaving(false);
     }
@@ -150,11 +191,29 @@ export default function EditArticlePage({ params }: PageProps) {
     }
   };
 
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="animate-spin h-12 w-12 text-red-600 mx-auto mb-4" />
+          <p className="text-gray-500 mb-4">Cargando artículo...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null; // El useEffect redirigirá
+  }
+
   if (!article) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-500 mb-4">Cargando artículo...</p>
+          <p className="text-red-600 mb-4">{error || 'Artículo no encontrado'}</p>
+          <Link href="/dashboard">
+            <Button>Volver al Dashboard</Button>
+          </Link>
         </div>
       </div>
     );
